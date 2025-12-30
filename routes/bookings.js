@@ -15,6 +15,7 @@ const puppeteer = require("puppeteer");
 const { format } = require("date-fns");
 
 const { v4: uuidv4 } = require("uuid");
+const axios = require("axios");
 
 require("dotenv").config();
 
@@ -25,6 +26,8 @@ const payu_salt = process.env.PAYU_MERCHANT_SALT || "diKKGjJv3yODMXnmPF48WXaQLWo
 // "MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCS2TYPoivPA9qOZW+c+evpYJGF9I6Ti/FVL3+3AyEImmWr9kd8NXRnWkRw79JmzJ+wUL1HkuloTCEvOcnoN16sd2bQ3n4j2WRca0QkHbx4JougH3NKfUkVIo2n21xlaxu9xiIjMZF1OQbNhMJfid/vP7FSaUhLdN46aWvyjxohK30IRvGnXbOH3666UtJXDSvebtrClLfUdX/9zOXLUU45vncGyCtylNiADLW5dMR5EkB8vQwpFXbQ+79LG9RRSDD8yCIJbd8Z4EB5gt1rQwdiUeV2T45ncSETFNKudUtwt/SxffzQPH5qDiyU2D35Cc5lUQQmELjK9aLYI/ge6ss1AgMBAAECggEAFxolc2GttzBxxIeoPr+hsdIvqq2N9Z/lPGPP2ZScMIyLtLk2x09oi+7rSAIurV4BPF2DXZx67F3XtaSHg2kck5DoQ7FREmY7r/9vFah480ULH8p62ovpwLGyK+dqeokWcO1YBwXgDptFWvVJF/sql+rDBIZMKZTN9k4J/buuHmwKQEqOowUBQWP1oo0Sgrnv48nQqlPfGatxq7U4w4hRLf3l6UR0c/mPHVb00UabBaZzZ9B/jMMasHDtLKYQ/69VtCo2QVm9Kykh3bRHKjiAF5f606gHiewILi3jj+lcnUrcDL1pFkBqskrJ8NibHfdJkaT1w3W1n463cLfCCntD2QKBgQC67h1lGo3avoB4GdoGMzqsDg9Bub0FpI2/lnL5oeFgygRvYRBb78E3fUKuYIWcUjiZaTgukIsMtZKPEpv90tJXua5dQEOOip9D4SQddHoT7MNToFFKJ5pXzHonc8dSMQYLV3LeR1V/9inJhrRPjedhr1jdJBMLZIAOe/mZBDh8CQKBgQDJG7zPL0sua6WkX6lLX0JydmEjbOFedeL2olY3pm8Vj0iC1ejUzsYrRwHEc1YUr2bO0NQ0uQ64dLhl+AXu2HwCWu7aRKMas0lg4uFemcmerqUMd1ozJJfI3fhjfSaFXwSqn5LcclUCXt/LOx49cxN9HmPHYNpyvV+P17gchIG4zQKBgCL95+rBKcTE3G+fBz0Z4eXLS/fVuRiRUSeIFkW8k9/2cRYYaWOMYfLtM8pIrzov+gBdvfKZhC4A30qBBUpiaJWbYJR8LylDscSXJJeO8jtAmt/QpubmuvGsiUFRXwJ3wtXkrNAHMm4dunzLBn3N5n5WwJ/E3PvI+F+9vV9zds9hAoGAdz5eHo8RSe4EIkmibRGHqaztff7SRpspv0mUS50A4sy5lvJVAtG0CPcqYhxtHwi9scV6/eP4iYCT0cpVYkC0jwTx+TOXbn599Nex/9C6Dr/JF3IxZn+9DBopbHxJee1ULANAJjwYkbZFhhCAprj0Bk0dppuUC1KkNfsXrLkY3cUCgYAYdRxY9KFg97jhRyD25LKTHbLyp5+rd53UxxNM5GGaxwHCe0FPj9jTD9x6NoGIg1cLDeaTIy20a4cDJx5v50yrMFvnbIMCcQ4nm71GfXUtO53O/k4ptTk9jVlM8ymJ/kK0956OODrrCTz/4Sur4+11gkd1LAw+MfKHZ8gtWrswPQ=="; //process.env.PAYU_MERCHANT_SALT;
 
 const PAYU_BASE_URL = process.env.PAYU_BASE_URL || "https://test.payu.in"  //'https://secure.payu.in';
+
+const { instamojo_api_key, instamojo_auth_token, instamojo_base_url } = require("./instamojo.config");
 
 const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || "https://nirwanastays.com";
 
@@ -806,8 +809,314 @@ router.post("/payments/payu", async (req, res) => {
   }
 });
 
+// Instamojo Payment Gateway Endpoint
+router.post("/payments/instamojo", async (req, res) => {
+  try {
+    const { amount, firstname, email, phone, booking_id, productinfo, coupon_code } = req.body;
 
+    // --- Validation ---
+    if (!amount || !firstname || !email || !booking_id || !productinfo) {
+      return res.status(400).json({ success: false, error: "Missing required payment parameters" });
+    }
 
+    const numericAmount = parseFloat(amount);
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      return res.status(400).json({ success: false, error: "Invalid amount" });
+    }
+
+    const cleanPhone = phone ? phone.toString().replace(/\D/g, "") : "";
+    if (cleanPhone.length < 10) {
+      return res.status(400).json({ success: false, error: "Valid 10-digit phone required" });
+    }
+
+    // --- Check booking ---
+    const [booking] = await pool.execute(
+      'SELECT id FROM bookings WHERE id = ? AND payment_status = "pending"',
+      [booking_id]
+    );
+    if (booking.length === 0) {
+      return res.status(404).json({ success: false, error: "Pending booking not found" });
+    }
+
+    // --- Generate transaction ID ---
+    const txnid = `INSTAMOJO-${uuidv4()}`;
+
+    // --- Save txnid ---
+    await pool.execute(
+      'UPDATE bookings SET payment_txn_id = ?, payment_status = "pending" WHERE id = ?',
+      [txnid, booking_id]
+    );
+
+    // --- Instamojo API Configuration ---
+    if (!instamojo_api_key || !instamojo_auth_token) {
+      return res.status(500).json({ success: false, error: "Instamojo credentials not configured" });
+    }
+
+    // --- Prepare Instamojo Payment Request ---
+    const paymentRequestData = {
+      purpose: productinfo.substring(0, 30), // Instamojo allows max 30 chars
+      amount: numericAmount.toFixed(2),
+      buyer_name: firstname.substring(0, 100),
+      email: email.substring(0, 75),
+      phone: cleanPhone.substring(0, 10),
+      redirect_url: `${ADMIN_BASE_URL}/admin/bookings/success/verify/instamojo/${txnid}`,
+      webhook: `${ADMIN_BASE_URL}/admin/bookings/instamojo/webhook`,
+      allow_repeated_payments: false,
+      send_email: false,
+      send_sms: false,
+    };
+
+    // --- Create Payment Request via Instamojo API ---
+    const instamojoApiUrl = `${instamojo_base_url}/api/1.1/payment-requests/`;
+    
+    // Convert data to URL-encoded format for Instamojo API
+    const formData = new URLSearchParams();
+    Object.keys(paymentRequestData).forEach(key => {
+      formData.append(key, paymentRequestData[key]);
+    });
+    
+    try {
+      const instamojoResponse = await axios.post(instamojoApiUrl, formData.toString(), {
+        headers: {
+          'X-Api-Key': instamojo_api_key,
+          'X-Auth-Token': instamojo_auth_token,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
+
+      const paymentRequest = instamojoResponse.data.payment_request;
+
+      if (!paymentRequest || !paymentRequest.longurl) {
+        console.error("❌ Instamojo response error:", instamojoResponse.data);
+        return res.status(500).json({ success: false, error: "Failed to create Instamojo payment request" });
+      }
+
+      console.log("✅ Instamojo payment request created:", paymentRequest.id);
+
+      // --- Update booking with payment_request_id (store in payment_txn_id with format: INSTAMOJO-{uuid}|{payment_request_id}) ---
+      await pool.execute(
+        'UPDATE bookings SET payment_txn_id = ? WHERE id = ?',
+        [`${txnid}|${paymentRequest.id}`, booking_id]
+      );
+
+      // --- Respond to frontend ---
+      res.json({
+        success: true,
+        message: "Payment initiated",
+        instamojo_url: paymentRequest.longurl, // This is the payment URL
+        payment_request_id: paymentRequest.id,
+        payment_data: {
+          payment_request_id: paymentRequest.id,
+          txnid: txnid
+        }
+      });
+
+    } catch (instamojoError) {
+      console.error("💥 Instamojo API error:", instamojoError.response?.data || instamojoError.message);
+      return res.status(500).json({ 
+        success: false, 
+        error: "Instamojo payment initiation failed",
+        details: instamojoError.response?.data?.message || instamojoError.message
+      });
+    }
+
+  } catch (error) {
+    console.error("💥 Instamojo initiation error:", error);
+    res.status(500).json({ success: false, error: "Payment initiation failed" });
+  }
+});
+
+// Instamojo Webhook Handler
+router.post("/instamojo/webhook", async (req, res) => {
+  console.log("📥 Instamojo webhook received");
+  console.log("Webhook data:", req.body);
+
+  try {
+    const { payment_request_id, payment_id, status } = req.body;
+
+    if (!payment_request_id || !payment_id) {
+      return res.status(400).json({ error: "Missing payment_request_id or payment_id" });
+    }
+
+    // Find booking by payment_request_id (stored in payment_txn_id as: INSTAMOJO-{uuid}|{payment_request_id})
+    const [bookings] = await pool.execute(
+      'SELECT id, payment_txn_id FROM bookings WHERE payment_txn_id LIKE ?',
+      [`%|${payment_request_id}`]
+    );
+
+    if (bookings.length === 0) {
+      console.error("❌ Booking not found for payment_request_id:", payment_request_id);
+      return res.status(404).json({ error: "Booking not found" });
+    }
+
+    const booking = bookings[0];
+    // Extract txnid (part before |)
+    const txnid = booking.payment_txn_id.split('|')[0];
+
+    if (status === "Credit") {
+      // Payment successful
+      await pool.execute(
+        "UPDATE bookings SET payment_status = ? WHERE payment_txn_id LIKE ?",
+        ["success", `${txnid}%`]
+      );
+      console.log("✅ Payment successful for booking:", booking.id);
+    } else {
+      // Payment failed
+      await pool.execute(
+        "UPDATE bookings SET payment_status = ? WHERE payment_txn_id LIKE ?",
+        ["failed", `${txnid}%`]
+      );
+      console.log("❌ Payment failed for booking:", booking.id);
+    }
+
+    res.status(200).json({ success: true });
+
+  } catch (error) {
+    console.error("💥 Instamojo webhook error:", error);
+    res.status(500).json({ error: "Webhook processing failed" });
+  }
+});
+
+// Instamojo Success Verification (redirect handler)
+router.get("/success/verify/instamojo/:txnid", async (req, res) => {
+  console.log("✅ Instamojo payment verification callback received");
+  const { txnid } = req.params;
+  const { payment_request_id, payment_id } = req.query;
+
+  try {
+    // Verify payment status with Instamojo API
+    if (payment_request_id && payment_id) {
+      const verifyUrl = `${instamojo_base_url}/api/1.1/payment-requests/${payment_request_id}/payments/${payment_id}/`;
+      
+      try {
+        const verifyResponse = await axios.get(verifyUrl, {
+          headers: {
+            'X-Api-Key': instamojo_api_key,
+            'X-Auth-Token': instamojo_auth_token
+          }
+        });
+
+        const payment = verifyResponse.data.payment;
+        
+        if (payment && payment.status === "Credit") {
+          // Update booking status (txnid format: INSTAMOJO-{uuid}|{payment_request_id})
+          await pool.execute(
+            "UPDATE bookings SET payment_status = ? WHERE payment_txn_id LIKE ?",
+            ["success", `${txnid}%`]
+          );
+          console.log("✅ Booking updated with status: success");
+
+          // Fetch booking details for email
+          const [bookings] = await pool.execute(`
+            SELECT guest_email, id, guest_name, guest_phone, rooms, adults, children, 
+                   food_veg, food_nonveg, food_jain, check_in, check_out, 
+                   total_amount, advance_amount, coupon_used, Discount, accommodation_id 
+            FROM bookings WHERE payment_txn_id LIKE ?`,
+            [`${txnid}%`]
+          );
+
+          if (bookings && bookings.length > 0) {
+            const bk = bookings[0];
+            const remainingAmount = parseFloat(bk.total_amount) - parseFloat(bk.advance_amount);
+
+            const formatDate = (dateValue) => {
+              if (!dateValue) return "Invalid date";
+              try {
+                const date = new Date(dateValue);
+                if (isNaN(date.getTime())) throw new Error("Invalid date");
+                return format(date, "dd/MM/yyyy");
+              } catch (e) {
+                console.error("❌ Invalid date format:", dateValue);
+                return "Invalid date";
+              }
+            };
+
+            const today = new Date();
+            const day = String(today.getDate()).padStart(2, "0");
+            const month = String(today.getMonth() + 1).padStart(2, "0");
+            const year = today.getFullYear();
+            const formattedDate = `${year}-${month}-${day}`;
+
+            const recipientEmail = bk.guest_email?.trim();
+
+            const [accommodations] = await pool.execute(`
+              SELECT name, address, latitude, longitude, owner_id, type 
+              FROM accommodations WHERE id = ?`,
+              [bk.accommodation_id]
+            );
+
+            const acc = accommodations[0] || {};
+            const owner_id = acc.owner_id;
+
+            const [users] = await pool.execute(`SELECT email, name, phoneNumber FROM users WHERE id = ?`, [owner_id]);
+            const user = users[0] || {};
+
+            const ownerEmail = user.email;
+            const ownerName = user.name;
+            const ownerMobile = user.phoneNumber;
+            const totalPrice = (bk.total_amount - (bk.Discount || 0)).toFixed(2);
+
+            console.log("🚀 Attempting to send confirmation email...");
+            try {
+              await sendPdfEmail({
+                email: recipientEmail,
+                name: bk.guest_name,
+                BookingId: bk.id,
+                BookingDate: formattedDate,
+                CheckinDate: formatDate(bk.check_in),
+                CheckoutDate: formatDate(bk.check_out),
+                totalPrice: totalPrice,
+                advancePayable: bk.advance_amount,
+                remainingAmount: remainingAmount.toFixed(2),
+                mobile: bk.guest_phone,
+                totalPerson: bk.adults + bk.children,
+                adult: bk.adults,
+                child: bk.children,
+                vegCount: bk.food_veg,
+                nonvegCount: bk.food_nonveg,
+                joinCount: bk.food_jain,
+                accommodationName: acc.name || "",
+                accommodationAddress: acc.address || "",
+                latitude: acc.latitude || "",
+                longitude: acc.longitude || "",
+                ownerEmail: ownerEmail || "",
+                ownerName: ownerName || "",
+                ownerPhone: ownerMobile || "",
+                rooms: bk.rooms || 0,
+                coupons: bk.coupon_used || 0,
+                full_amount: bk.total_amount || 0,
+                discount: (bk.Discount || 0).toFixed(2),
+                accommodation_type: acc.type || "resort",
+              });
+              console.log("✅ Confirmation email sent to:", recipientEmail);
+            } catch (e) {
+              console.error("❌ Email sending failed:", e.message);
+            }
+          }
+
+          return res.redirect(`${FRONTEND_BASE_URL}/payment/success/${txnid}`);
+        } else {
+          // Payment not successful
+          await pool.execute(
+            "UPDATE bookings SET payment_status = ? WHERE payment_txn_id LIKE ?",
+            ["failed", `${txnid}%`]
+          );
+          return res.redirect(`${FRONTEND_BASE_URL}/payment/failed/${txnid}`);
+        }
+      } catch (verifyError) {
+        console.error("💥 Instamojo verification error:", verifyError);
+        return res.redirect(`${FRONTEND_BASE_URL}/payment/failed/${txnid}`);
+      }
+    } else {
+      // Missing payment IDs, redirect to failed
+      return res.redirect(`${FRONTEND_BASE_URL}/payment/failed/${txnid}`);
+    }
+
+  } catch (error) {
+    console.error("💥 Verification error:", error);
+    return res.redirect(`${FRONTEND_BASE_URL}/payment/failed/${txnid}`);
+  }
+});
 
 async function sendPdfEmail(params) {
   const {
@@ -3670,6 +3979,171 @@ router.get("/room-occupancy", async (req, res) => {
 
       details:
         process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
+
+// GET /admin/bookings/multi-date-availability - Get room availability for multiple dates
+router.get("/multi-date-availability", async (req, res) => {
+  try {
+    const { dates, id } = req.query;
+
+    // Validate parameters
+    if (!dates || !id) {
+      return res.status(400).json({
+        success: false,
+        error: "dates (comma-separated YYYY-MM-DD) and id are required",
+      });
+    }
+
+    // Parse dates - can be comma-separated string or array
+    let dateArray = [];
+    if (typeof dates === 'string') {
+      dateArray = dates.split(',').map(d => d.trim()).filter(d => d);
+    } else if (Array.isArray(dates)) {
+      dateArray = dates;
+    }
+
+    if (dateArray.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "At least one date is required",
+      });
+    }
+
+    // Validate date format
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    const invalidDates = dateArray.filter(d => !dateRegex.test(d));
+    if (invalidDates.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid date format. Dates must be YYYY-MM-DD. Invalid: ${invalidDates.join(', ')}`,
+      });
+    }
+
+    // Get accommodation details first
+    const [accommodationRows] = await pool.execute(
+      'SELECT rooms FROM accommodations WHERE id = ?',
+      [id]
+    );
+
+    if (accommodationRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "Accommodation not found",
+      });
+    }
+
+    const baseRooms = accommodationRows[0].rooms || 0;
+
+    // Get blocked dates with additional rooms
+    // Use DATE() function to avoid collation issues (returns DATE type, not string)
+    const blockedPlaceholders = dateArray.map(() => 'DATE(blocked_date) = CAST(? AS DATE)').join(' OR ');
+    const [blockedRows] = await pool.execute(
+      `SELECT 
+        DATE(blocked_date) AS blocked_date,
+        rooms as additional_rooms
+      FROM blocked_dates 
+      WHERE accommodation_id = ? 
+        AND (${blockedPlaceholders})`,
+      [id, ...dateArray]
+    );
+
+    // Create a map of blocked dates
+    const blockedMap = {};
+    blockedRows.forEach(row => {
+      // Convert DATE to string format YYYY-MM-DD
+      const dateValue = row.blocked_date;
+      const dateStr = dateValue instanceof Date 
+        ? dateValue.toISOString().split('T')[0]
+        : String(dateValue).split(' ')[0].split('T')[0];
+      const additionalRooms = row.additional_rooms !== null && row.additional_rooms !== '' && row.additional_rooms !== 'null' 
+        ? parseInt(row.additional_rooms, 10) || 0 
+        : 0;
+      blockedMap[dateStr] = additionalRooms;
+    });
+
+    // Get booked rooms for all dates in one query
+    // Build placeholders with proper date casting to avoid collation issues
+    const datePlaceholders = dateArray.map(() => '(DATE(check_in) <= CAST(? AS DATE) AND DATE(check_out) > CAST(? AS DATE))').join(' OR ');
+    const bookedQueryParams = [id];
+    dateArray.forEach(date => {
+      bookedQueryParams.push(date, date);
+    });
+
+    const [bookedRows] = await pool.execute(
+      `SELECT 
+        DATE(check_in) AS check_in,
+        DATE(check_out) AS check_out,
+        rooms
+      FROM bookings
+      WHERE payment_status = 'success'
+        AND accommodation_id = ?
+        AND (${datePlaceholders})`,
+      bookedQueryParams
+    );
+
+    // Calculate booked rooms for each date
+    const bookedRoomsMap = {};
+    dateArray.forEach(date => {
+      bookedRoomsMap[date] = 0;
+    });
+
+    bookedRows.forEach(booking => {
+      const checkIn = booking.check_in instanceof Date 
+        ? booking.check_in 
+        : new Date(booking.check_in);
+      const checkOut = booking.check_out instanceof Date 
+        ? booking.check_out 
+        : new Date(booking.check_out);
+      const rooms = booking.rooms || 0;
+
+      dateArray.forEach(date => {
+        const currentDate = new Date(date + 'T00:00:00');
+        currentDate.setHours(0, 0, 0, 0);
+        const checkInDate = new Date(checkIn);
+        checkInDate.setHours(0, 0, 0, 0);
+        const checkOutDate = new Date(checkOut);
+        checkOutDate.setHours(0, 0, 0, 0);
+        // Check if date falls within booking range
+        if (currentDate >= checkInDate && currentDate < checkOutDate) {
+          bookedRoomsMap[date] = (bookedRoomsMap[date] || 0) + rooms;
+        }
+      });
+    });
+
+    // Calculate availability for each date
+    const availabilityData = dateArray.map(date => {
+      const additionalRooms = blockedMap[date] || 0;
+      const totalRooms = baseRooms + additionalRooms;
+      const bookedRooms = bookedRoomsMap[date] || 0;
+      const availableRooms = Math.max(0, totalRooms - bookedRooms);
+
+      return {
+        date,
+        total_rooms: totalRooms,
+        booked_rooms: bookedRooms,
+        available_rooms: availableRooms,
+        additional_rooms: additionalRooms
+      };
+    });
+
+    // Find minimum available rooms
+    const minAvailableRooms = Math.min(...availabilityData.map(d => d.available_rooms));
+
+    res.json({
+      success: true,
+      accommodation_id: id,
+      base_rooms: baseRooms,
+      dates: availabilityData,
+      min_available_rooms: minAvailableRooms
+    });
+  } catch (error) {
+    console.error("Error fetching multi-date availability:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch multi-date availability data",
+      details: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 });
