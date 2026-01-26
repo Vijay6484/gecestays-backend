@@ -2,6 +2,7 @@ const express = require('express');
 const routes = express.Router();
 const pool = require('../dbcon');
 const app = express();
+const { getCache, setCache } = require('../utils/redisCache');
 
 // Helper function to create database connection
 const createConnection = async () => {
@@ -18,6 +19,12 @@ app.use(express.json());
 
 // GET /admin/properties/accommodations - Fetch all accommodations
 routes.get('/accommodations', async (req, res) => {
+    const cacheKey = `properties:list:${req.originalUrl}`;
+    const cached = await getCache(cacheKey);
+    if (cached) {
+        return res.json(cached);
+    }
+
     const connection = await createConnection();
 
     try {
@@ -203,7 +210,7 @@ routes.get('/accommodations', async (req, res) => {
             }
         }));
 
-        res.json({
+        const responsePayload = {
             data: formattedRows,
             pagination: {
                 total,
@@ -213,7 +220,10 @@ routes.get('/accommodations', async (req, res) => {
                 hasNextPage: pageNum < totalPages,
                 hasPrevPage: pageNum > 1
             }
-        });
+        };
+
+        await setCache(cacheKey, responsePayload);
+        res.json(responsePayload);
 
     } catch (error) {
         console.error('Database error:', error);
@@ -239,6 +249,12 @@ routes.get('/accommodations/:id', async (req, res) => {
     if (!Number.isInteger(Number(id)) || Number(id) < 0) {
         console.log("Invalid ID format");
         return res.status(400).json({ error: 'Invalid accommodation ID format' });
+    }
+
+    const cacheKey = `properties:detail:${id}`;
+    const cached = await getCache(cacheKey);
+    if (cached) {
+        return res.json(cached);
     }
 
     const connection = await createConnection();
@@ -328,6 +344,7 @@ routes.get('/accommodations/:id', async (req, res) => {
             }
         };
 
+        await setCache(cacheKey, response);
         res.json(response);
 
     } catch (error) {
@@ -818,9 +835,16 @@ routes.get('/users', async (req, res) => {
 // GET /admin/properties/cities
 routes.get('/cities', async (req, res) => {
     try {
+        const cacheKey = 'locations:cities';
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json(cached);
+        }
+
         const connection = await createConnection();
         const [rows] = await connection.execute('SELECT id, name, country FROM cities WHERE active = 1');
         await closeConnection(connection);
+        await setCache(cacheKey, rows, 3600);
         res.json(rows);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch cities' });

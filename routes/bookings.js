@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 
 const pool = require("../dbcon");
+const { getCache, setCache } = require("../utils/redisCache");
 
 const crypto = require("crypto");
 
@@ -61,8 +62,8 @@ bookingCleanup();
 
 router.get("/", async (req, res) => {
   try {
-    const { 
-      page = 1, 
+    const {
+      page = 1,
       limit = 20,
       search,
       payment_status,
@@ -106,7 +107,7 @@ router.get("/", async (req, res) => {
       queryParams.push(end_date);
     }
 
-    const whereClause = whereConditions.length > 0 
+    const whereClause = whereConditions.length > 0
       ? `WHERE ${whereConditions.join(' AND ')}`
       : '';
 
@@ -213,7 +214,93 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST /admin/bookings - create booking
+// POST /admin/bookings/send-email/:id - send booking confirmation email manually
+router.post("/send-email/:id", async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const { id } = req.params;
+
+    // Fetch booking
+    const [bookingRows] = await connection.execute(
+      `SELECT b.*, a.name AS accommodation_name, a.address AS accommodation_address,
+              a.latitude, a.longitude, a.owner_id, a.type AS accommodation_type
+       FROM bookings b
+       JOIN accommodations a ON b.accommodation_id = a.id
+       WHERE b.id = ?`,
+      [id]
+    );
+
+    if (bookingRows.length === 0) {
+      return res.status(404).json({ success: false, error: "Booking not found" });
+    }
+
+    const booking = bookingRows[0];
+
+    // Fetch owner
+    const [ownerRows] = await connection.execute(
+      `SELECT email, phoneNumber, name FROM users WHERE id = ?`,
+      [booking.owner_id]
+    );
+
+    const owner = ownerRows[0] || {};
+    const ownerEmail = owner.email;
+    const ownerName = owner.name;
+    const ownerPhone = owner.phoneNumber;
+
+    const remainingAmount = booking.total_amount - booking.advance_amount;
+    const formatDate = (dateValue) => {
+      if (!dateValue) return "Invalid date";
+      try {
+        const date = new Date(dateValue);
+        if (isNaN(date.getTime())) throw new Error("Invalid date");
+        return format(date, "dd/MM/yyyy");
+      } catch (e) {
+        return "Invalid date";
+      }
+    };
+
+    const totalPrice = (booking.total_amount - (booking.Discount || 0)).toFixed(2);
+
+    await sendPdfEmail({
+      email: booking.guest_email || "",
+      name: booking.guest_name || "",
+      BookingId: booking.id || "",
+      BookingDate: formatDate(booking.created_at) || "",
+      CheckinDate: formatDate(booking.check_in) || "",
+      CheckoutDate: formatDate(booking.check_out) || "",
+      totalPrice: totalPrice,
+      advancePayable: booking.advance_amount || "",
+      remainingAmount: remainingAmount.toFixed(2) || "",
+      mobile: booking.guest_phone || "",
+      totalPerson: booking.adults + booking.children || "",
+      adult: booking.adults || "",
+      child: booking.children || "",
+      vegCount: booking.food_veg || "",
+      nonvegCount: booking.food_nonveg || "",
+      joinCount: booking.food_jain || "",
+      accommodationName: booking.accommodation_name || "",
+      accommodationAddress: booking.accommodation_address || "",
+      latitude: booking.latitude || "",
+      longitude: booking.longitude || "",
+      ownerEmail: ownerEmail || "",
+      ownerName: ownerName || "",
+      ownerPhone: ownerPhone || "",
+      rooms: booking.rooms || "",
+      coupons: booking.coupon_used || "",
+      discount: booking.Discount || "0",
+      full_amount: booking.total_amount || "",
+      accommodation_type: booking.accommodation_type || "resort"
+    });
+
+    res.json({ success: true, message: "Email sent successfully" });
+
+  } catch (error) {
+    console.error("Error sending email:", error);
+    res.status(500).json({ success: false, error: "Failed to send email" });
+  } finally {
+    connection.release();
+  }
+});
 
 router.post("/", async (req, res) => {
   const connection = await pool.getConnection();
@@ -868,13 +955,13 @@ router.post("/payments/instamojo", async (req, res) => {
 
     // --- Create Payment Request via Instamojo API ---
     const instamojoApiUrl = `${instamojo_base_url}/api/1.1/payment-requests/`;
-    
+
     // Convert data to URL-encoded format for Instamojo API
     const formData = new URLSearchParams();
     Object.keys(paymentRequestData).forEach(key => {
       formData.append(key, paymentRequestData[key]);
     });
-    
+
     try {
       const instamojoResponse = await axios.post(instamojoApiUrl, formData.toString(), {
         headers: {
@@ -913,8 +1000,8 @@ router.post("/payments/instamojo", async (req, res) => {
 
     } catch (instamojoError) {
       console.error("💥 Instamojo API error:", instamojoError.response?.data || instamojoError.message);
-      return res.status(500).json({ 
-        success: false, 
+      return res.status(500).json({
+        success: false,
         error: "Instamojo payment initiation failed",
         details: instamojoError.response?.data?.message || instamojoError.message
       });
@@ -987,7 +1074,7 @@ router.get("/success/verify/instamojo/:txnid", async (req, res) => {
     // Verify payment status with Instamojo API
     if (payment_request_id && payment_id) {
       const verifyUrl = `${instamojo_base_url}/api/1.1/payment-requests/${payment_request_id}/payments/${payment_id}/`;
-      
+
       try {
         const verifyResponse = await axios.get(verifyUrl, {
           headers: {
@@ -997,7 +1084,7 @@ router.get("/success/verify/instamojo/:txnid", async (req, res) => {
         });
 
         const payment = verifyResponse.data.payment;
-        
+
         if (payment && payment.status === "Credit") {
           // Update booking status (txnid format: INSTAMOJO-{uuid}|{payment_request_id})
           await pool.execute(
@@ -1184,7 +1271,7 @@ async function sendPdfEmail(params) {
   }
 
 
-  const html = `<!DOCTYPE html
+  const legacyHtml = `<!DOCTYPE html
 
   PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
@@ -2313,7 +2400,7 @@ async function sendPdfEmail(params) {
 
 </html>`;
 
-  const html_villa = `<!DOCTYPE html
+  const legacyHtmlVilla = `<!DOCTYPE html
 
     PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
@@ -3426,6 +3513,140 @@ async function sendPdfEmail(params) {
   </html>`;
 
 
+  const buildEmailHtml = () => `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Booking Confirmation</title>
+    <style>
+      body { margin: 0; padding: 0; background: #f5f7f9; font-family: "Lato", Arial, sans-serif; color: #1f2933; }
+      .container { max-width: 680px; margin: 0 auto; background: #ffffff; }
+      .header { background: #0f6f5c; color: #ffffff; padding: 28px 32px; }
+      .header h1 { margin: 0; font-size: 22px; font-weight: 700; }
+      .header p { margin: 6px 0 0; font-size: 13px; opacity: 0.9; }
+      .section { padding: 24px 32px; }
+      .muted { color: #5f6c76; font-size: 13px; }
+      .title { font-size: 18px; margin: 0 0 8px; }
+      .card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; }
+      .grid { width: 100%; border-collapse: collapse; }
+      .grid th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; padding-bottom: 8px; }
+      .grid td { padding: 4px 0; font-size: 13px; }
+      .divider { height: 1px; background: #e5e7eb; margin: 16px 0; }
+      .badge { display: inline-block; background: #e6f4ef; color: #0f6f5c; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+      .footer { background: #0f172a; color: #e2e8f0; padding: 20px 32px; font-size: 12px; }
+      .link { color: #0f6f5c; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f7f9;">
+      <tr>
+        <td>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="container">
+            <tr>
+              <td class="header">
+                <h1>${accommodationName}</h1>
+                <p>Booking ID: <strong>${BookingId}</strong> | Booking Date: ${BookingDate}</p>
+              </td>
+            </tr>
+            <tr>
+              <td class="section">
+                <p><strong>Dear ${name},</strong></p>
+                <p style="margin: 8px 0 0;">
+                  ${accommodationName} has received a request for booking of your Camping as per the details below. The
+                  primary guest ${name} will be carrying a copy of this e-voucher.
+                </p>
+                <p style="margin: 8px 0 0;">For your reference, Booking ID is <strong>${BookingId}</strong>.</p>
+                <p style="margin: 8px 0 0;">
+                  <strong>The amount payable to ${accommodationName} for this booking is INR ${advancePayable}. Please email us at
+                  <a class="link" href="mailto:${ownerEmail}">${ownerEmail}</a> if there is any discrepancy in this payment amount.</strong>
+                </p>
+                <p style="margin: 12px 0 0;">Kindly consider this e-voucher for booking confirmation with the following inclusions and services.</p>
+                <div style="margin-top: 12px;"><span class="badge">All prices indicated below are in INR</span></div>
+              </td>
+            </tr>
+            <tr>
+              <td class="section">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td width="50%" style="padding-right: 8px;">
+                      <div class="card">
+                        <h3 class="title">Booking Details</h3>
+                        <table class="grid">
+                          <tr><td>Mobile:</td><td><strong>${mobile}</strong></td></tr>
+                          <tr><td>Check In:</td><td><strong>${CheckinDate}</strong></td></tr>
+                          <tr><td>Check Out:</td><td><strong>${CheckoutDate}</strong></td></tr>
+                          <tr><td>Total Person:</td><td><strong>${totalPerson}</strong></td></tr>
+                          <tr><td>Adult:</td><td><strong>${adult}</strong></td></tr>
+                          <tr><td>Child:</td><td><strong>${child}</strong></td></tr>
+                          <tr><td>Rooms:</td><td><strong>${rooms}</strong></td></tr>
+                          <tr><td>Veg Count:</td><td><strong>${vegCount}</strong></td></tr>
+                          <tr><td>Non Veg Count:</td><td><strong>${nonvegCount}</strong></td></tr>
+                          <tr><td>Jain Count:</td><td><strong>${joinCount}</strong></td></tr>
+                        </table>
+                      </div>
+                    </td>
+                    <td width="50%" style="padding-left: 8px;">
+                      <div class="card">
+                        <h3 class="title">Payment Breakup</h3>
+                        <table class="grid">
+                          <tr><td>Full Amount:</td><td><strong>${full_amount}</strong></td></tr>
+                          <tr><td>Discount:</td><td><strong>${discount}</strong></td></tr>
+                          <tr><td>Coupon:</td><td><strong>${coupons}</strong></td></tr>
+                          <tr><td>Total Amount:</td><td><strong>${totalPrice}</strong></td></tr>
+                          <tr><td>Advance Amount:</td><td><strong>${advancePayable}</strong></td></tr>
+                          <tr><td>Remaining Amount:</td><td><strong>${remainingAmount}</strong></td></tr>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+                <div class="divider"></div>
+                <p><strong>Booking Cancellation Policy:</strong> From >${BookingDate},100% penalty will be charged. In case of no show : no refund.Booking cannot be cancelled/modified on or after the booking date and time mentioned in the Camping Confirmation Voucher. All time mentioned above is in destination time.</p>
+                <div class="divider"></div>
+                <p><strong>Note</strong></p>
+                <p>If your contact details have changed, please notify us so that the same can be updated in our records.</p>
+                <p style="margin-top: 8px;">If the booking is cancelled or changed by guest at a later stage, you will be notified and this confirmation email & Nirwana Stays Booking ID will be null and void.</p>
+              </td>
+            </tr>
+            <tr>
+              <td class="section">
+                <h3 class="title">${accommodationName} Contact Info</h3>
+                <div class="card">
+                  <p><strong>${accommodationName}</strong></p>
+                  <p>At- ${accommodationAddress}</p>
+                  <p>pawna lake</p>
+                  <p><a class="link" href="http://maps.google.com/maps?q=${latitude},${longitude}">Google Maps Link</a></p>
+                  <div class="divider"></div>
+                  <p><strong>Email - </strong><a class="link" href="mailto:${ownerEmail}">${ownerEmail}</a></p>
+                  <p><strong>Contact Number - </strong>${ownerName || "Property Host"} - ${ownerPhone || ""}</p>
+                </div>
+                <div class="divider"></div>
+                <p><strong>Note</strong> - Please do not reply to this email. It has been sent from an email account that is not monitored. To ensure that you receive communication related to your booking from Nirwana Stays , please add <a class="link" href="mailto:bookings@nirwanastays.com"><strong>bookings@nirwanastays.com</strong></a> to your contact list and address book.</p>
+                <div class="divider"></div>
+                <h3 class="title">Things to Carry</h3>
+                <p>• Always good to carry extra pair of clothes<br />
+                  • Winter and warm clothes as it will be cold night<br />
+                  • Toothbrush and paste (toiletries)<br />
+                  • Any other things you feel necessary<br />
+                  • Personal medicine if any</p>
+              </td>
+            </tr>
+            <tr>
+              <td class="footer">
+                Team ${accommodationName} | Thank you for choosing us.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  const html = buildEmailHtml();
+  const html_villa = buildEmailHtml();
+
   const transporter = nodemailer.createTransport({
     host: "smtp.hostinger.com",
 
@@ -4011,6 +4232,8 @@ router.get("/multi-date-availability", async (req, res) => {
       });
     }
 
+    dateArray = dateArray.sort();
+
     // Validate date format
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     const invalidDates = dateArray.filter(d => !dateRegex.test(d));
@@ -4019,6 +4242,12 @@ router.get("/multi-date-availability", async (req, res) => {
         success: false,
         error: `Invalid date format. Dates must be YYYY-MM-DD. Invalid: ${invalidDates.join(', ')}`,
       });
+    }
+
+    const cacheKey = `booking:availability:${id}:${dateArray.join("|")}`;
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
     }
 
     // Get accommodation details first
@@ -4054,11 +4283,11 @@ router.get("/multi-date-availability", async (req, res) => {
     blockedRows.forEach(row => {
       // Convert DATE to string format YYYY-MM-DD
       const dateValue = row.blocked_date;
-      const dateStr = dateValue instanceof Date 
+      const dateStr = dateValue instanceof Date
         ? dateValue.toISOString().split('T')[0]
         : String(dateValue).split(' ')[0].split('T')[0];
-      const additionalRooms = row.additional_rooms !== null && row.additional_rooms !== '' && row.additional_rooms !== 'null' 
-        ? parseInt(row.additional_rooms, 10) || 0 
+      const additionalRooms = row.additional_rooms !== null && row.additional_rooms !== '' && row.additional_rooms !== 'null'
+        ? parseInt(row.additional_rooms, 10) || 0
         : 0;
       blockedMap[dateStr] = additionalRooms;
     });
@@ -4090,11 +4319,11 @@ router.get("/multi-date-availability", async (req, res) => {
     });
 
     bookedRows.forEach(booking => {
-      const checkIn = booking.check_in instanceof Date 
-        ? booking.check_in 
+      const checkIn = booking.check_in instanceof Date
+        ? booking.check_in
         : new Date(booking.check_in);
-      const checkOut = booking.check_out instanceof Date 
-        ? booking.check_out 
+      const checkOut = booking.check_out instanceof Date
+        ? booking.check_out
         : new Date(booking.check_out);
       const rooms = booking.rooms || 0;
 
@@ -4131,13 +4360,16 @@ router.get("/multi-date-availability", async (req, res) => {
     // Find minimum available rooms
     const minAvailableRooms = Math.min(...availabilityData.map(d => d.available_rooms));
 
-    res.json({
+    const responsePayload = {
       success: true,
       accommodation_id: id,
       base_rooms: baseRooms,
       dates: availabilityData,
       min_available_rooms: minAvailableRooms
-    });
+    };
+
+    await setCache(cacheKey, responsePayload, 120);
+    res.json(responsePayload);
   } catch (error) {
     console.error("Error fetching multi-date availability:", error);
     res.status(500).json({

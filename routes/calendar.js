@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../dbcon');
 const cron = require('node-cron');
+const { getCache, setCache } = require('../utils/redisCache');
 
 cron.schedule('0 2 * * *', async () => {
   try {
@@ -25,6 +26,12 @@ router.get('/blocked-dates', async (req, res) => {
   console.log('Fetching blocked dates');
 
   try {
+    const cacheKey = 'calendar:blocked:all';
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const [rows] = await pool.execute(`
       SELECT 
         bd.id, 
@@ -50,7 +57,9 @@ router.get('/blocked-dates', async (req, res) => {
   updated_at: r.updated_at ? r.updated_at.toLocaleString('en-GB', { hour12: false }) : null
 }));
 
-    res.json({ success: true, data: formattedRows });
+    const responsePayload = { success: true, data: formattedRows };
+    await setCache(cacheKey, responsePayload, 300);
+    res.json(responsePayload);
   } catch (error) {
     console.error('Error fetching blocked dates:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch blocked dates' });
@@ -63,6 +72,12 @@ router.get('/blocked-dates/:id', async (req, res) => {
   console.log('Fetching blocked dates for accommodation_id:', accommodation_id);
 
   try {
+    const cacheKey = `calendar:blocked:${accommodation_id}`;
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     let query = `
       SELECT
         bd.id,
@@ -95,7 +110,9 @@ router.get('/blocked-dates/:id', async (req, res) => {
   updated_at: r.updated_at ? r.updated_at.toLocaleString('en-GB', { hour12: false }) : null
 }));
 
-    res.json({ success: true, data: formattedRows });
+    const responsePayload = { success: true, data: formattedRows };
+    await setCache(cacheKey, responsePayload, 300);
+    res.json(responsePayload);
   } catch (error) {
     console.error('Error fetching blocked dates:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch blocked dates' });

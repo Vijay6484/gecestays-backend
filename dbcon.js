@@ -8,7 +8,7 @@ const pool = mysql.createPool({
   host: process.env.DB_HOST || 'srv1881.hstgr.io',
   user: process.env.DB_USER || 'u774474676_nirwanastays',
   password:process.env.DB_PASSWORD||'Nirwana@$%123',
-  database: process.env.DB_NAME || 'u774474676_nirwana',
+  database: process.env.DB_NAME || 'u774474676_nirwana'
   port: parseInt(process.env.DB_PORT || '3306'),
   
   // Conservative pool settings

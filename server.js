@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const safeParse = require('./utils/safeParse');
 const pool = require('./dbcon');
+const { invalidatePublicCaches } = require('./utils/redisCache');
 
 dotenv.config();
 const app = express();
@@ -38,6 +39,23 @@ app.use(cors({
 
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+
+// Invalidate caches after successful write operations
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    const isWrite =
+      req.method === 'POST' ||
+      req.method === 'PUT' ||
+      req.method === 'PATCH' ||
+      req.method === 'DELETE';
+    if (isWrite && req.path.startsWith('/admin') && res.statusCode < 400) {
+      invalidatePublicCaches().catch((err) =>
+        console.error('Cache invalidation failed:', err.message)
+      );
+    }
+  });
+  next();
+});
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
