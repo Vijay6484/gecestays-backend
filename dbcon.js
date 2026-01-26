@@ -7,10 +7,10 @@ const activeConnections = new Set();
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'srv1881.hstgr.io',
   user: process.env.DB_USER || 'u774474676_nirwanastays',
-  password:process.env.DB_PASSWORD||'Nirwana@$%123',
-  database: process.env.DB_NAME || 'u774474676_nirwana'
+  password: process.env.DB_PASSWORD || 'Nirwana@$%123',
+  database: process.env.DB_NAME || 'u774474676_nirwana',
   port: parseInt(process.env.DB_PORT || '3306'),
-  
+
   // Conservative pool settings
   connectionLimit: 5,
   waitForConnections: false,
@@ -27,7 +27,7 @@ const pool = mysql.createPool({
 pool.on('acquire', (connection) => {
   activeConnections.add(connection.threadId);
   console.log(`Connection acquired (${connection.threadId}), Active: ${activeConnections.size}`);
-  
+
   // Set timeout to detect leaks
   connection.leakTimer = setTimeout(() => {
     console.error(`Connection ${connection.threadId} potentially leaked!`);
@@ -51,7 +51,7 @@ pool.on('error', (err) => {
 // Health check
 async function checkPoolHealth() {
   console.log(`Pool status: Total=${pool.totalCount}, Active=${activeConnections.size}, Idle=${pool.idleCount}`);
-  
+
   if (activeConnections.size > 20) {
     console.warn('WARNING: Approaching connection limit!');
   }
