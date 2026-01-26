@@ -292,11 +292,16 @@ router.post("/send-email/:id", async (req, res) => {
       accommodation_type: booking.accommodation_type || "resort"
     });
 
+    console.log(`✅ [DEBUG] Email sent successfully to ${booking.guest_email}`);
     res.json({ success: true, message: "Email sent successfully" });
 
   } catch (error) {
-    console.error("Error sending email:", error);
-    res.status(500).json({ success: false, error: "Failed to send email" });
+    console.error("❌ [DEBUG] Error in send-email route:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to send email",
+      details: error.message
+    });
   } finally {
     connection.release();
   }
