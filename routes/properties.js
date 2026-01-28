@@ -18,6 +18,12 @@ app.use(express.json());
 
 
 // GET /admin/properties/accommodations - Fetch all accommodations
+// Alias for typo 'accomodations'
+routes.get('/accomodations', (req, res) => {
+    console.log("⚠️ Redirecting typo route /accomodations to /accommodations");
+    res.redirect(307, req.baseUrl + '/accommodations' + (req._parsedUrl.search || ''));
+});
+
 routes.get('/accommodations', async (req, res) => {
     const cacheKey = `properties:list:${req.originalUrl}`;
     const cached = await getCache(cacheKey);
@@ -390,7 +396,7 @@ routes.post('/accommodations', async (req, res) => {
         } = req.body;
 
         // Validate required fields
-        if (!basicInfo || !basicInfo.name || !basicInfo.type || 
+        if (!basicInfo || !basicInfo.name || !basicInfo.type ||
             !basicInfo.capacity || !basicInfo.rooms || !basicInfo.price) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
@@ -398,15 +404,15 @@ routes.post('/accommodations', async (req, res) => {
         const connection = await createConnection();
 
         // Extract values from nested structure
-        const { 
-            name, 
-            description, 
-            type, 
-            capacity, 
-            rooms, 
-            price, 
-            features = [], 
-            images = [], 
+        const {
+            name,
+            description,
+            type,
+            capacity,
+            rooms,
+            price,
+            features = [],
+            images = [],
             available = true,
             MaxPersonVilla,
             RatePersonVilla
@@ -539,7 +545,7 @@ routes.put('/accommodations/:id', async (req, res) => {
             const location = requestBody.location || {};
             const amenities = requestBody.amenities || {};
             const packages = requestBody.packages || {};
-            
+
             // Prepare update data with validation
             const updateData = {
                 name: validateInput(basicInfo.name ?? current.name, 'string', true),
@@ -646,14 +652,14 @@ routes.put('/accommodations/:id', async (req, res) => {
             await connection.rollback();
             await closeConnection(connection);
             console.error('Error updating accommodation:', error);
-            
-            if (error.message.includes('Missing required') || 
+
+            if (error.message.includes('Missing required') ||
                 error.message.includes('Invalid number') ||
                 error.message.includes('must be positive')) {
                 return res.status(400).json({ error: error.message });
             }
 
-            res.status(500).json({ 
+            res.status(500).json({
                 error: 'Failed to update accommodation',
                 details: process.env.NODE_ENV === 'development' ? error.message : undefined
             });
@@ -736,7 +742,7 @@ routes.delete('/accommodations/:id', async (req, res) => {
         // More specific error handling
         let errorMessage = 'Failed to delete accommodation';
         let errorDetails = {};
-        
+
         if (error.code === 'ER_ROW_IS_REFERENCED_2') {
             errorMessage = 'Cannot delete - accommodation is referenced by other records';
             errorDetails = { hint: 'Please delete related bookings or reviews first' };

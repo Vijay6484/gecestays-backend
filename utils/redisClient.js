@@ -16,11 +16,36 @@ const getRedisClient = async () => {
 
     client = createClient(
       url
-        ? { url }
+        ? {
+          url,
+          socket: {
+            reconnectStrategy: (retries) => {
+              if (retries > 5) {
+                console.error("❌ Redis reconnection attempts exhausted. Disabling Redis.");
+                return new Error("Redis reconnection attempts exhausted");
+              }
+              const delay = Math.min(retries * 100, 3000);
+              console.log(`⚠️ Redis connection failed. Retrying in ${delay}ms... (Attempt ${retries})`);
+              return delay;
+            },
+          },
+        }
         : {
-            socket: { host, port },
-            password,
-          }
+          socket: {
+            host,
+            port,
+            reconnectStrategy: (retries) => {
+              if (retries > 5) {
+                console.error("❌ Redis reconnection attempts exhausted. Disabling Redis.");
+                return new Error("Redis reconnection attempts exhausted");
+              }
+              const delay = Math.min(retries * 100, 3000);
+              console.log(`⚠️ Redis connection failed. Retrying in ${delay}ms... (Attempt ${retries})`);
+              return delay;
+            },
+          },
+          password,
+        }
     );
 
     client.on("error", (err) => {
