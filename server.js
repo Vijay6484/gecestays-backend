@@ -30,6 +30,10 @@ app.use(cors({
     'http://localhost:5174',
     'https://gecestays.com',
     'https://www.gecestays.com',
+    'https://arnastays.com',
+    'https://www.arnastays.com',
+    'https://www.admin.arnastays.com',
+    'https://admin.arnastays.com'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
