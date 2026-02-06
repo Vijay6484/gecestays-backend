@@ -1892,7 +1892,7 @@ async function sendPdfEmail(params) {
 
                                             <a href="mailto: ${ownerEmail}"
 
-                                              style="color: #216896;">bookings@nirwanastays.com</a> if there is any
+                                              style="color: #216896;">bookings@arnastays.com</a> if there is any
 
                                             discrepancy in this payment
 
@@ -2241,7 +2241,7 @@ async function sendPdfEmail(params) {
 
                                                     href="mailto:${ownerEmail}"
 
-                                                    style="color: #164e6f;"><b>bookings@nirwanastays.com</b></a></span>
+                                                    style="color: #164e6f;"><b>bookings@arnastays.com</b></a></span>
 
                                               </div>
 
@@ -2297,9 +2297,9 @@ async function sendPdfEmail(params) {
 
                                           email account that is not monitored. To ensure that you receive
 
-                                          communication related to your booking from Nirwana stays , please add <a href="mailto:bookings@nirwanastays.com "
+                                          communication related to your booking from Nirwana stays , please add <a href="mailto:bookings@arnastays.com "
 
-                                            style="color: #164e6f;"><b>bookings@nirwanastays.com </b></a> to your contact list
+                                            style="color: #164e6f;"><b>bookings@arnastays.com </b></a> to your contact list
 
                                           and
 
@@ -3021,7 +3021,7 @@ async function sendPdfEmail(params) {
 
                                               <a href="mailto: ${ownerEmail}"
 
-                                                style="color: #216896;">bookings@nirwanastays.com</a> if there is any
+                                                style="color: #216896;">bookings@arnastays.com</a> if there is any
 
                                               discrepancy in this payment
 
@@ -3353,7 +3353,7 @@ async function sendPdfEmail(params) {
 
                                                       href="mailto:${ownerEmail}"
 
-                                                      style="color: #164e6f;"><b>bookings@nirwanastays.com</b></a></span>
+                                                      style="color: #164e6f;"><b>bookings@arnastays.com</b></a></span>
 
                                                 </div>
 
@@ -3409,9 +3409,9 @@ async function sendPdfEmail(params) {
 
                                             email account that is not monitored. To ensure that you receive
 
-                                            communication related to your booking from Nirwana stays , please add <a href="mailto:bookings@nirwanastays.com "
+                                            communication related to your booking from Nirwana stays , please add <a href="mailto:bookings@arnastays.com "
 
-                                              style="color: #164e6f;"><b>bookings@nirwanastays.com </b></a> to your contact list
+                                              style="color: #164e6f;"><b>bookings@arnastays.com </b></a> to your contact list
 
                                             and
 
@@ -3627,7 +3627,7 @@ async function sendPdfEmail(params) {
                   <p><strong>Contact Number - </strong>${ownerName || "Property Host"} - ${ownerPhone || ""}</p>
                 </div>
                 <div class="divider"></div>
-                <p><strong>Note</strong> - Please do not reply to this email. It has been sent from an email account that is not monitored. To ensure that you receive communication related to your booking from Nirwana Stays , please add <a class="link" href="mailto:bookings@nirwanastays.com"><strong>bookings@nirwanastays.com</strong></a> to your contact list and address book.</p>
+                <p><strong>Note</strong> - Please do not reply to this email. It has been sent from an email account that is not monitored. To ensure that you receive communication related to your booking from Nirwana Stays , please add <a class="link" href="mailto:bookings@arnastays.com"><strong>bookings@arnastays.com</strong></a> to your contact list and address book.</p>
                 <div class="divider"></div>
                 <h3 class="title">Things to Carry</h3>
                 <p>• Always good to carry extra pair of clothes<br />
@@ -3660,28 +3660,28 @@ async function sendPdfEmail(params) {
     port: 587,
 
     auth: {
-      user: "bookings@nirwanastays.com",
+      user: "bookings@arnastays.com",
 
       pass: "Nirwanastays@6484",
     },
   });
 
   const mailOptions = {
-    from: "bookings@nirwanastays.com",
+    from: "bookings@arnastays.com",
     to: email.trim(),
     cc: ownerEmail,
-    bcc: "nirwanastays@gmail.com",
-    subject: "NirwanaStays Resort Booking",
+    bcc: "arnastays@gmail.com",
+    subject: "ArnaStays Resort Booking",
 
     html: html, // Make sure HTML variable is defined
   };
 
   const mailOptions_villa = {
-    from: "bookings@nirwanastays.com",
+    from: "bookings@arnastays.com",
     to: email.trim(),
     cc: ownerEmail,
-    bcc: "nirwanastays@gmail.com",
-    subject: "NirwanaStays Resort Booking",
+    bcc: "arnastays@gmail.com",
+    subject: "ArnaStays Resort Booking",
 
     html: html_villa, // Make sure HTML variable is defined
   };
