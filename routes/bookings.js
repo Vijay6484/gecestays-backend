@@ -3662,7 +3662,7 @@ async function sendPdfEmail(params) {
     auth: {
       user: "bookings@arnastays.com",
 
-      pass: "Nirwanastays@6484",
+      pass: "Arnastays@6484",
     },
   });
 
