@@ -25,11 +25,7 @@ routes.get('/accomodations', (req, res) => {
 });
 
 routes.get('/accommodations', async (req, res) => {
-    const cacheKey = `properties:list:${req.originalUrl}`;
-    const cached = await getCache(cacheKey);
-    if (cached) {
-        return res.json(cached);
-    }
+    // Cache removed for accommodations list
 
     const connection = await createConnection();
 
@@ -247,7 +243,7 @@ routes.get('/accommodations', async (req, res) => {
             }
         };
 
-        await setCache(cacheKey, responsePayload);
+        // await setCache(cacheKey, responsePayload);
         res.json(responsePayload);
 
     } catch (error) {
@@ -276,11 +272,7 @@ routes.get('/accommodations/:id', async (req, res) => {
         return res.status(400).json({ error: 'Invalid accommodation ID format' });
     }
 
-    const cacheKey = `properties:detail:${id}`;
-    const cached = await getCache(cacheKey);
-    if (cached) {
-        return res.json(cached);
-    }
+    // Cache removed for accommodation detail
 
     const connection = await createConnection();
 
@@ -370,7 +362,7 @@ routes.get('/accommodations/:id', async (req, res) => {
             }
         };
 
-        await setCache(cacheKey, response);
+        // await setCache(cacheKey, response);
         res.json(response);
 
     } catch (error) {
