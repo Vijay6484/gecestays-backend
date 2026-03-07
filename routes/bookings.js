@@ -144,6 +144,8 @@ router.get("/", async (req, res) => {
         b.rooms,
 
         b.total_amount,
+        
+        b.website,
 
         b.advance_amount,
 
@@ -334,6 +336,7 @@ router.post("/", async (req, res) => {
       advance_amount = 0,
       coupon_code = 0,
       discount = 0,
+      website = 'Pawnacamp',
       payment_method = "payu",
     } = req.body;
 
@@ -410,9 +413,9 @@ router.post("/", async (req, res) => {
 
         check_in, check_out, adults, children, rooms, food_veg, food_nonveg, 
 
-        food_jain, total_amount, advance_amount, payment_status, payment_txn_id, created_at,coupon_used,Discount
+        food_jain, total_amount, advance_amount, payment_status, payment_txn_id, created_at,coupon_used,Discount, website
 
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 
       [
         guest_name,
@@ -436,6 +439,7 @@ router.post("/", async (req, res) => {
         new Date(),
         coupon_code || null,
         discount || 0,
+        website,
       ]
     );
 
@@ -487,7 +491,8 @@ router.post("/offline", async (req, res) => {
       advance_amount = 0,
       coupon,
       discount,
-      full_amount
+      full_amount,
+      website = 'Arnastays'
     } = req.body;
 
     // Validate required fields
@@ -598,9 +603,9 @@ router.post("/offline", async (req, res) => {
 
         check_in, check_out, adults, children, rooms, food_veg, food_nonveg,
 
-        food_jain, total_amount, advance_amount, payment_status, payment_txn_id, created_at,coupon_used,Discount
+        food_jain, total_amount, advance_amount, payment_status, payment_txn_id, created_at,coupon_used,Discount, website
 
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 
       [
         guest_name,
@@ -624,6 +629,7 @@ router.post("/offline", async (req, res) => {
         new Date(),
         coupon || null,
         discount || null,
+        website,
       ]
     );
 

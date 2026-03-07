@@ -82,6 +82,7 @@ routes.get('/accommodations', async (req, res) => {
                 max_guests,
                 MaxPersonVilla,
                 RatePersonVilla,
+                website,
                 created_at,
                 updated_at
             FROM accommodations
@@ -138,6 +139,16 @@ routes.get('/accommodations', async (req, res) => {
             query += ' WHERE ' + conditions.join(' AND ');
         }
 
+        // Add website filter if provided in query
+        const websiteFilter = req.query.website;
+        if (websiteFilter) {
+            if (conditions.length > 0) {
+                query = query.replace(' WHERE ', ` WHERE website = '${websiteFilter}' AND `);
+            } else {
+                query += ` WHERE website = '${websiteFilter}'`;
+            }
+        }
+
         // Validate sort field against actual table columns
         const validSortFields = [
             'id', 'name', 'type', 'price', 'capacity', 'rooms',
@@ -157,11 +168,18 @@ routes.get('/accommodations', async (req, res) => {
         const [rows] = await connection.execute(query, params);
 
         // Get total count (using same conditions)
-        const countQuery = `
+        let countQuery = `
             SELECT COUNT(*) as total 
             FROM accommodations
             ${conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : ''}
         `;
+        if (websiteFilter) {
+            if (conditions.length > 0) {
+                countQuery = countQuery.replace('WHERE', `WHERE website = '${websiteFilter}' AND`);
+            } else {
+                countQuery += ` WHERE website = '${websiteFilter}'`;
+            }
+        }
         const [countRows] = await connection.execute(countQuery, params.slice(0, -2));
         const total = countRows[0].total;
         const totalPages = Math.ceil(total / limitNum);
@@ -191,6 +209,7 @@ routes.get('/accommodations', async (req, res) => {
             amenities: processJsonField(row.amenity_ids, []),
             maxPerson: row.MaxPersonVilla || null,
             ratePerPerson: row.RatePersonVilla || null,
+            website: row.website,
             location: {
                 address: row.address,
                 coordinates: {
@@ -311,6 +330,7 @@ routes.get('/accommodations/:id', async (req, res) => {
                 rooms: accommodation.rooms || 1,
                 price: accommodation.price || 0,
                 available: isAvailable, // Using the availability flag
+                website: accommodation.website || '',
                 features: parseJSONField(accommodation.features, []),
                 images: parseJSONField(accommodation.images, [])
             },
@@ -430,14 +450,15 @@ routes.post('/accommodations', async (req, res) => {
         const adultPrice = packages?.pricing?.adult || 0;
         const childPrice = packages?.pricing?.child || 0;
         const maxGuests = packages?.pricing?.maxGuests || 2;
+        const website = basicInfo.website || null;
 
         // Insert into database
         const [result] = await connection.execute(
             `INSERT INTO accommodations 
             (name, description, type, capacity, rooms, price, features, images, available, owner_id, city_id, 
              address, latitude, longitude, amenity_ids, package_name, package_description, package_images,
-             adult_price, child_price, max_guests, MaxPersonVilla, RatePersonVilla) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             adult_price, child_price, max_guests, MaxPersonVilla, RatePersonVilla, website) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 name,
                 description || null,
@@ -461,7 +482,8 @@ routes.post('/accommodations', async (req, res) => {
                 childPrice,
                 maxGuests,
                 MaxPersonVilla || null,
-                RatePersonVilla || null
+                RatePersonVilla || null,
+                website
             ]
         );
 
@@ -570,7 +592,8 @@ routes.put('/accommodations/:id', async (req, res) => {
                 child_price: validateInput(packages.pricing?.child ?? current.child_price, 'number'),
                 max_guests: validateInput(packages.pricing?.maxGuests ?? current.max_guests, 'number'),
                 MaxPersonVilla: validateInput(basicInfo.MaxPersonVilla ?? current.MaxPersonVilla, 'number'),
-                RatePersonVilla: validateInput(basicInfo.RatePersonVilla ?? current.RatePersonVilla, 'number')
+                RatePersonVilla: validateInput(basicInfo.RatePersonVilla ?? current.RatePersonVilla, 'number'),
+                website: validateInput(basicInfo.website ?? current.website, 'string')
             };
 
             // Additional validation
@@ -604,6 +627,7 @@ routes.put('/accommodations/:id', async (req, res) => {
                     max_guests = ?,
                     MaxPersonVilla = ?,
                     RatePersonVilla = ?,
+                    website = ?,
                     updated_at = CURRENT_TIMESTAMP()
                 WHERE id = ?`,
                 [
@@ -630,6 +654,7 @@ routes.put('/accommodations/:id', async (req, res) => {
                     updateData.max_guests,
                     updateData.MaxPersonVilla,
                     updateData.RatePersonVilla,
+                    updateData.website,
                     id
                 ]
             );
