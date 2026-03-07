@@ -28,6 +28,7 @@ app.use(cors({
     'http://localhost:5173',
     'https://adminnirwana-front.vercel.app',
     'http://localhost:5174',
+    'http://localhost:5176',
     'https://gecestays.com',
     'https://www.gecestays.com',
     'https://arnastays.com',
