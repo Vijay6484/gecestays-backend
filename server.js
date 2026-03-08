@@ -34,7 +34,9 @@ app.use(cors({
     'https://arnastays.com',
     'https://www.arnastays.com',
     'https://www.admin.arnastays.com',
-    'https://admin.arnastays.com'
+    'https://admin.arnastays.com',
+    'https://pavanacamps.com',
+    'https://www.pavanacamps.com'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
