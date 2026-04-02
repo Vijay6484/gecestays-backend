@@ -111,7 +111,7 @@ router.get("/", async (req, res) => {
       ? `WHERE ${whereConditions.join(' AND ')}`
       : '';
 
-    // Main query
+    // Main query (includes meal columns when present in DB)
     const bookingsQuery = `
       SELECT 
 
@@ -144,13 +144,8 @@ router.get("/", async (req, res) => {
         b.rooms,
 
         b.total_amount,
-        
-        b.website,
 
         b.advance_amount,
-
-        b.Discount,
-        b.coupon_used,
 
         b.payment_status,
 
@@ -168,6 +163,34 @@ router.get("/", async (req, res) => {
       LIMIT ? OFFSET ?
     `;
 
+    // Fallback without food_* columns (older schemas)
+    const bookingsQueryMinimal = `
+      SELECT 
+        b.id,
+        b.guest_name,
+        b.guest_email,
+        b.guest_phone,
+        0 AS food_veg,
+        0 AS food_nonveg,
+        0 AS food_jain,
+        a.name AS accommodation_name,
+        DATE_FORMAT(b.check_in, '%Y-%m-%d') AS check_in,
+        DATE_FORMAT(b.check_out, '%Y-%m-%d') AS check_out,
+        b.adults,
+        b.children,
+        b.rooms,
+        b.total_amount,
+        b.advance_amount,
+        b.payment_status,
+        b.payment_txn_id,
+        b.created_at
+      FROM bookings b
+      LEFT JOIN accommodations a ON b.accommodation_id = a.id
+      ${whereClause}
+      ORDER BY b.created_at DESC
+      LIMIT ? OFFSET ?
+    `;
+
     // Count query for pagination
     const countQuery = `
       SELECT COUNT(*) as count 
@@ -176,11 +199,22 @@ router.get("/", async (req, res) => {
       ${whereClause}
     `;
 
-    // Execute queries
-    const [bookings] = await pool.execute(
-      bookingsQuery,
-      [...queryParams, parseInt(limit), parseInt(offset)]
-    );
+    const execParams = [...queryParams, parseInt(limit), parseInt(offset)];
+
+    let bookings;
+    try {
+      [bookings] = await pool.execute(bookingsQuery, execParams);
+    } catch (firstErr) {
+      if (firstErr.code === "ER_BAD_FIELD_ERROR") {
+        console.warn(
+          "Bookings list: primary query failed, using minimal column set:",
+          firstErr.sqlMessage
+        );
+        [bookings] = await pool.execute(bookingsQueryMinimal, execParams);
+      } else {
+        throw firstErr;
+      }
+    }
 
     const [[{ count }]] = await pool.execute(
       countQuery,
@@ -203,7 +237,7 @@ router.get("/", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error fetching bookings:", error);
+    console.error("Error fetching bookings:", error.sqlMessage || error.message, error.code);
 
     res.status(500).json({
       success: false,
@@ -211,7 +245,9 @@ router.get("/", async (req, res) => {
       error: "Failed to fetch bookings",
 
       details:
-        process.env.NODE_ENV === "development" ? error.message : undefined,
+        process.env.NODE_ENV === "development"
+          ? error.sqlMessage || error.message
+          : undefined,
     });
   }
 });
