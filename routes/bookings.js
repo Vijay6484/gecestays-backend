@@ -381,7 +381,6 @@ router.post("/", async (req, res) => {
     const requiredFields = [
       "guest_name",
       "accommodation_id",
-      "package_id",
       "check_in",
       "check_out",
       "total_amount",
@@ -394,6 +393,7 @@ router.post("/", async (req, res) => {
     console.log(missingFields);
 
     if (missingFields.length > 0) {
+      await connection.rollback();
       return res
         .status(400)
         .json({
@@ -416,24 +416,60 @@ router.post("/", async (req, res) => {
     // }
 
     if (new Date(check_in) >= new Date(check_out)) {
+      await connection.rollback();
       return res
         .status(400)
         .json({ success: false, error: "Check-out must be after check-in" });
     }
 
     if (total_amount <= 0 || advance_amount < 0) {
+      await connection.rollback();
       return res
         .status(400)
         .json({ success: false, error: "Invalid amount values" });
     }
 
     if (adults < 1 || rooms < 1) {
+      await connection.rollback();
       return res
         .status(400)
         .json({
           success: false,
           error: "Must have at least 1 adult and 1 room",
         });
+    }
+
+    // package_id FK: accommodations store package text/pricing on the property row, not packages.id.
+    // Clients often send 0 or a default id that does not exist — resolve to a real packages.id.
+    let resolvedPackageId = Number(package_id);
+    if (!Number.isFinite(resolvedPackageId) || resolvedPackageId <= 0) {
+      resolvedPackageId = null;
+    }
+    if (resolvedPackageId == null) {
+      const [pkgRows] = await connection.execute(
+        "SELECT id FROM packages ORDER BY id ASC LIMIT 1"
+      );
+      resolvedPackageId = pkgRows[0]?.id ?? null;
+    } else {
+      const [exists] = await connection.execute(
+        "SELECT id FROM packages WHERE id = ? LIMIT 1",
+        [resolvedPackageId]
+      );
+      if (exists.length === 0) {
+        const [pkgRows] = await connection.execute(
+          "SELECT id FROM packages ORDER BY id ASC LIMIT 1"
+        );
+        resolvedPackageId = pkgRows[0]?.id ?? null;
+      }
+    }
+    if (resolvedPackageId == null || !Number.isFinite(resolvedPackageId)) {
+      await connection.rollback();
+      return res.status(500).json({
+        success: false,
+        error: "Failed to create booking",
+        details:
+          "No package is configured in the database. Add a row in the packages table or contact support.",
+      });
     }
 
     const payment_status = "pending";
@@ -458,7 +494,7 @@ router.post("/", async (req, res) => {
         guest_email,
         guest_phone || null,
         accommodation_id,
-        package_id,
+        resolvedPackageId,
 
         check_in,
         check_out,
@@ -495,8 +531,8 @@ router.post("/", async (req, res) => {
 
       error: "Failed to create booking",
 
-      details:
-        process.env.NODE_ENV === "development" ? error.message : undefined,
+      // Surface DB message so ops can fix FK / schema issues (e.g. missing packages row)
+      details: error.message,
     });
   } finally {
     connection.release();
