@@ -720,7 +720,6 @@ routes.delete('/accommodations/:id', async (req, res) => {
             'accommodation_amenities',
             'bookings',
             'reviews',
-            'packages'
         ];
 
         for (const table of childTables) {
