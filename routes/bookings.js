@@ -34,6 +34,99 @@ const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || "https://nirwanastays
 
 const ADMIN_BASE_URL = process.env.ADMIN_BASE_URL || "https://api.nirwanastays.com";
 
+/**
+ * bookings.package_id FK points at packages.id; pricing/display lives on accommodations.
+ * When packages has no rows (common for this app), insert one placeholder for the FK.
+ */
+async function ensureDefaultPackageRow(connection) {
+  const [already] = await connection.execute(
+    "SELECT id FROM packages ORDER BY id ASC LIMIT 1"
+  );
+  if (already.length > 0) return Number(already[0].id);
+
+  let colRows;
+  try {
+    const [rows] = await connection.execute(
+      `SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT, EXTRA
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'packages'
+       ORDER BY ORDINAL_POSITION`
+    );
+    colRows = rows;
+  } catch (err) {
+    console.error("ensureDefaultPackageRow: schema lookup failed", err.message);
+    return null;
+  }
+
+  if (!colRows.length) return null;
+
+  const hasImplicitDefault = (c) => c.COLUMN_DEFAULT != null;
+
+  const insertCols = [];
+  const insertVals = [];
+  for (const c of colRows) {
+    const name = String(c.COLUMN_NAME || "").replace(/`/g, "");
+    if (!/^[a-zA-Z0-9_]+$/.test(name)) continue;
+    if (String(c.EXTRA || "").toLowerCase().includes("auto_increment")) continue;
+    if (c.IS_NULLABLE === "YES") continue;
+    if (hasImplicitDefault(c)) continue;
+
+    insertCols.push(`\`${name}\``);
+    const dt = String(c.DATA_TYPE || "").toLowerCase();
+    if (
+      ["int", "bigint", "smallint", "tinyint", "mediumint", "decimal", "float", "double"].includes(
+        dt
+      )
+    ) {
+      insertVals.push(0);
+    } else if (dt === "json") {
+      insertVals.push(JSON.stringify({}));
+    } else if (["date", "datetime", "timestamp"].includes(dt)) {
+      insertVals.push(new Date());
+    } else if (dt === "year") {
+      insertVals.push(new Date().getFullYear());
+    } else {
+      insertVals.push(/name/i.test(name) ? "Default stay package" : "—");
+    }
+  }
+
+  const trySimpleInserts = async () => {
+    const attempts = [
+      ["INSERT INTO packages (name) VALUES (?)", ["Default stay package"]],
+      ["INSERT INTO packages (package_name) VALUES (?)", ["Default stay package"]],
+      ["INSERT INTO packages (title) VALUES (?)", ["Default stay package"]],
+    ];
+    for (const [sql, params] of attempts) {
+      try {
+        const [r] = await connection.execute(sql, params);
+        return Number(r.insertId);
+      } catch (e) {
+        /* try next column name */
+      }
+    }
+    return null;
+  };
+
+  try {
+    if (insertCols.length === 0) {
+      return await trySimpleInserts();
+    }
+    const ph = insertCols.map(() => "?").join(", ");
+    const sql = `INSERT INTO packages (${insertCols.join(", ")}) VALUES (${ph})`;
+    const [r] = await connection.execute(sql, insertVals);
+    return Number(r.insertId);
+  } catch (firstErr) {
+    console.warn(
+      "ensureDefaultPackageRow: primary insert failed, trying simple inserts",
+      firstErr.message
+    );
+    const id = await trySimpleInserts();
+    if (id != null && id > 0) return id;
+    console.error("ensureDefaultPackageRow: all inserts failed");
+    return null;
+  }
+}
+
 // BOOKING CLEANUP JOB
 
 const bookingCleanup = () => {
@@ -463,12 +556,23 @@ router.post("/", async (req, res) => {
       }
     }
     if (resolvedPackageId == null || !Number.isFinite(resolvedPackageId)) {
+      const bootstrapped = await ensureDefaultPackageRow(connection);
+      if (
+        bootstrapped != null &&
+        Number.isFinite(bootstrapped) &&
+        bootstrapped > 0
+      ) {
+        resolvedPackageId = bootstrapped;
+      }
+    }
+
+    if (resolvedPackageId == null || !Number.isFinite(resolvedPackageId)) {
       await connection.rollback();
       return res.status(500).json({
         success: false,
         error: "Failed to create booking",
         details:
-          "No package is configured in the database. Add a row in the packages table or contact support.",
+          "Could not resolve package_id (packages table empty or insert failed). Check server logs.",
       });
     }
 
