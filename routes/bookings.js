@@ -30,9 +30,9 @@ const PAYU_BASE_URL = process.env.PAYU_BASE_URL || "https://test.payu.in"  //'ht
 
 const { instamojo_api_key, instamojo_auth_token, instamojo_base_url } = require("./instamojo.config");
 
-const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || "https://nirwanastays.com";
+const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL ;
 
-const ADMIN_BASE_URL = process.env.ADMIN_BASE_URL || "https://api.nirwanastays.com";
+const ADMIN_BASE_URL = process.env.ADMIN_BASE_URL ;
 
 // BOOKING CLEANUP JOB
 
@@ -922,8 +922,8 @@ router.post("/payments/payu", async (req, res) => {
       firstname: truncatedFirstname,
       email: truncatedEmail,
       phone: cleanPhone.substring(0, 10),
-      surl: `https://api.nirwanastays.com/admin/bookings/success/verify/${txnid}`, // ✅ backend route
-      furl: `https://api.nirwanastays.com/admin/bookings/failed/verify/${txnid}`,  // ✅ backend route
+      surl: `https://api.arnastays.com/admin/bookings/success/verify/${txnid}`, // ✅ backend route
+      furl: `https://api.arnastays.com/admin/bookings/failed/verify/${txnid}`,  // ✅ backend route
       hash,
       currency: "INR",
       udf1, udf2, udf3, udf4, udf5, udf6, udf7, udf8, udf9, udf10
@@ -1780,7 +1780,7 @@ async function sendPdfEmail(params) {
 
                             style="font-size:0pt; line-height:0pt; text-align:right;background:#ffffff;padding-right: 6px;">
 
-                            <img src="https://nirwanastays.com/logo-dark.png" width="auto"
+                            <img src="https://arnastays.com/logo-dark.png" width="auto"
 
                               height="55" mc:edit="image_2" style="max-height:55px;" border="0" alt="Logo" />
 
@@ -2151,7 +2151,7 @@ async function sendPdfEmail(params) {
 
                                           stage,
 
-                                          you will be notified and this confirmation email & nirwana stays Booking ID will be null and void.</div>
+                                          you will be notified and this confirmation email & arna stays Booking ID will be null and void.</div>
 
                                       </td>
 
@@ -2339,7 +2339,7 @@ async function sendPdfEmail(params) {
 
                                           email account that is not monitored. To ensure that you receive
 
-                                          communication related to your booking from Nirwana stays , please add <a href="mailto:bookings@arnastays.com "
+                                          communication related to your booking from Arna stays , please add <a href="mailto:bookings@arnastays.com "
 
                                             style="color: #164e6f;"><b>bookings@arnastays.com </b></a> to your contact list
 
@@ -2909,7 +2909,7 @@ async function sendPdfEmail(params) {
 
                               style="font-size:0pt; line-height:0pt; text-align:right;background:#ffffff;padding-right: 6px;">
 
-                                <img src="https://nirwanastays.com/logo-dark.png" width="auto"
+                                <img src="https://arnastays.com/logo-dark.png" width="auto"
 
                                 height="55" mc:edit="image_2" style="max-height:55px;" border="0" alt="Logo" />
 
@@ -3263,7 +3263,7 @@ async function sendPdfEmail(params) {
 
                                             stage,
 
-                                            you will be notified and this confirmation email & nirwana stays Booking ID will be null and void.</div>
+                                            you will be notified and this confirmation email & Arna stays Booking ID will be null and void.</div>
 
                                         </td>
 
@@ -3451,7 +3451,7 @@ async function sendPdfEmail(params) {
 
                                             email account that is not monitored. To ensure that you receive
 
-                                            communication related to your booking from Nirwana stays , please add <a href="mailto:bookings@arnastays.com "
+                                            communication related to your booking from Arna stays , please add <a href="mailto:bookings@arnastays.com "
 
                                               style="color: #164e6f;"><b>bookings@arnastays.com </b></a> to your contact list
 
@@ -3653,7 +3653,7 @@ async function sendPdfEmail(params) {
                 <div class="divider"></div>
                 <p><strong>Note</strong></p>
                 <p>If your contact details have changed, please notify us so that the same can be updated in our records.</p>
-                <p style="margin-top: 8px;">If the booking is cancelled or changed by guest at a later stage, you will be notified and this confirmation email & Nirwana Stays Booking ID will be null and void.</p>
+                <p style="margin-top: 8px;">If the booking is cancelled or changed by guest at a later stage, you will be notified and this confirmation email & Arna Stays Booking ID will be null and void.</p>
               </td>
             </tr>
             <tr>
@@ -3669,7 +3669,7 @@ async function sendPdfEmail(params) {
                   <p><strong>Contact Number - </strong>${ownerName || "Property Host"} - ${ownerPhone || ""}</p>
                 </div>
                 <div class="divider"></div>
-                <p><strong>Note</strong> - Please do not reply to this email. It has been sent from an email account that is not monitored. To ensure that you receive communication related to your booking from Nirwana Stays , please add <a class="link" href="mailto:bookings@arnastays.com"><strong>bookings@arnastays.com</strong></a> to your contact list and address book.</p>
+                <p><strong>Note</strong> - Please do not reply to this email. It has been sent from an email account that is not monitored. To ensure that you receive communication related to your booking from Arna Stays , please add <a class="link" href="mailto:bookings@arnastays.com"><strong>bookings@arnastays.com</strong></a> to your contact list and address book.</p>
                 <div class="divider"></div>
                 <h3 class="title">Things to Carry</h3>
                 <p>• Always good to carry extra pair of clothes<br />
