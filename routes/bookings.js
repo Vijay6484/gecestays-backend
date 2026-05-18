@@ -3712,7 +3712,7 @@ async function sendPdfEmail(params) {
     from: "bookings@arnastays.com",
     to: email.trim(),
     cc: ownerEmail,
-    bcc: "arnastays@gmail.com",
+    bcc: "ganeshkale3819@gmail.com",
     subject: "ArnaStays Resort Booking",
 
     html: html, // Make sure HTML variable is defined
