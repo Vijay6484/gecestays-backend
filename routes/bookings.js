@@ -922,8 +922,8 @@ router.post("/payments/payu", async (req, res) => {
       firstname: truncatedFirstname,
       email: truncatedEmail,
       phone: cleanPhone.substring(0, 10),
-      surl: `https://api.arnastays.com/admin/bookings/success/verify/${txnid}`, // ✅ backend route
-      furl: `https://api.arnastays.com/admin/bookings/failed/verify/${txnid}`,  // ✅ backend route
+      surl: `https://api.gecestays.com/admin/bookings/success/verify/${txnid}`, // ✅ backend route
+      furl: `https://api.gecestays.com/admin/bookings/failed/verify/${txnid}`,  // ✅ backend route
       hash,
       currency: "INR",
       udf1, udf2, udf3, udf4, udf5, udf6, udf7, udf8, udf9, udf10
